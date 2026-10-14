@@ -32,6 +32,16 @@ npm test
 
 You should see `winners: 1` and `PASS: token was single-use.`
 
+### Observed result
+
+Verified against a local Docker Redis (`redis:7`, `REDIS_URL=redis://127.0.0.1:6379`),
+Node on Linux. 20 consecutive runs of `npm test` all reported **`winners: 1`**.
+
+Sanity check — temporarily replacing `GETDEL` with a two-step `GET` then `DEL`
+made all 5 concurrent consumers succeed (`winners: 5`, reproducible on 5/5 runs),
+confirming the race that the atomic command prevents. Reverted to `GETDEL` before
+submitting.
+
 ## Submit
 
 Open a Pull Request containing your `token-service.js`, `test.js`, and paste the

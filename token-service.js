@@ -28,8 +28,15 @@ const keyFor = (id) => "token:" + id;
  * @returns {Promise<string>}   The token id to hand to the user.
  */
 export async function issueToken(payload, ttlSeconds) {
-  // TODO: implement
-  throw new Error("issueToken not implemented");
+  const tokenId = crypto.randomBytes(16).toString("hex"); // 32 hex chars, 128 bits
+  const value = JSON.stringify(payload);
+
+  // Value and lifespan in ONE atomic command. EX sets the TTL, NX is a
+  // defensive guard so we can never clobber an existing id. Never split this
+  // into SET then EXPIRE — a crash in between leaves a token that never expires.
+  await redis.set(keyFor(tokenId), value, "EX", ttlSeconds, "NX");
+
+  return tokenId;
 }
 
 /**
@@ -47,8 +54,16 @@ export async function issueToken(payload, ttlSeconds) {
  * @returns {Promise<{ ok: true, payload: object } | { ok: false, reason: string }>}
  */
 export async function consumeToken(tokenId) {
-  // TODO: implement
-  throw new Error("consumeToken not implemented");
+  // GETDEL reads AND deletes in a single atomic command. GET then DEL would
+  // leave a gap where concurrent consumers all read the payload before any of
+  // them deletes it — the token would "work" N times.
+  const value = await redis.getdel(keyFor(tokenId));
+
+  // A consumed token and an expired token are indistinguishable in Redis:
+  // both simply don't exist. "invalid" is the honest answer for either.
+  if (value === null) return { ok: false, reason: "invalid" };
+
+  return { ok: true, payload: JSON.parse(value) };
 }
 
 // Allow other files to close the connection cleanly (used by test.js).
